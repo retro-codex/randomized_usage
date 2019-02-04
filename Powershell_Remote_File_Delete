@@ -1,0 +1,1 @@
+Get-ChildItem -Path "\\target_server_unc" -Recurse | Where-Object {($_.LastWriteTime -lt (Get-Date).AddDays(-15))} | Remove-Item
