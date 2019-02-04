@@ -1,0 +1,18 @@
+$RemotePath = "\\source_server_unc"
+$LocalPath = "\\target_server_unc"
+#RCN!max_days=how many days old
+$Max_days = "-1"
+#Max_mins = "-5"
+$Curr_date = get-date
+
+#Checking date and then copying file from RemotePath to LocalPath
+Foreach($file in (Get-ChildItem $RemotePath))
+{
+    if($file.LastWriteTime -gt ($Curr_date).adddays($Max_days))
+    {
+        Copy-Item -Path $file.fullname -Destination $LocalPath
+        #Move-Item -Path $file.fullname -Destination $LocalPath
+    }
+
+
+}
