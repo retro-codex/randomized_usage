@@ -1,0 +1,5 @@
+import fileinput
+import sys
+
+for line in fileinput.input("uppercase_fields.csv", inplace=1):
+    sys.stdout.write(line.lower())
