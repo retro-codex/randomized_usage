@@ -1,0 +1,292 @@
+##First and foremost, 100% shout out to the Giesl** as author of this script - 
+#Used to query SQL tables via Oracle, call them into Remedy Atrium Integrator for reconciliation into a CMDB
+
+import cx_Oracle
+import csv
+import base64
+import time, datetime
+import subprocess
+import os, sys
+import requests
+import json
+import logging
+
+# configure log file for logging messages as needed
+logging.basicConfig(filename='test_program_log.txt',format='%(asctime)s %(levelname)s %(message)s',datefmt='%m/%d/%Y %I:%M:%S %p',level=logging.INFO,)
+
+#configure your file names and database queriese in the dictionary below.  Format is as follows:
+#			  	'filename' : 
+#					{'view': 'databaseview',
+#					 'constraint' : 'WHERE ROWNUM < 5},'
+#
+
+configData = 	{	
+				'TableName/Common-Use Name' : 
+					{	'view':'Schema.Table_Name', 
+						'constraint': r''},
+				'TableName/Common-Use Name' : 
+					{	'view':'Schema.Table_Name', 
+						'constraint': r''},
+				'TableName/Common-Use Name' : 
+					{	'view':'Schema.Table_Name', 
+						'constraint': r''},
+				'TableName/Common-Use Name' : 
+					{	'view':'Schema.Table_Name', 
+						'constraint': r''},
+				'TableName/Common-Use Name' : 
+					{	'view':'Schema.Table_Name', 
+						'constraint': r''},
+				'TableName/Common-Use Name' : 
+					{	'view':'Schema.Table_Name', 
+						'constraint': r''},
+				'TableName/Common-Use Name' : 
+					{	'view':'Schema.Table_Name', 
+						'constraint': r''},						
+				'TableName/Common-Use Name' : 
+					{	'view':'Schema.Table_Name', 
+						'constraint': r''},																							
+				'people' : 
+					{	'view':'SCHEMA-NAME.PEOPLE', 
+						'constraint': r''},
+				'chassis' : 
+					{	'view':'SCHEMA-NAME.CHASSIS', 
+						'constraint': r''},
+				'support_group': 
+					{	'view':'SCHEMA-NAME.SUPPORT_GROUP_NAME',
+						'constraint': r''},
+				'support_group_members': 
+					{	'view':'SCHEMA-NAME.SUPPORT_GROUP_MEMBERS',
+						'constraint': r''},
+				                }	
+
+#used to pull current time for the console logging
+def getTime():
+	ts = time.time()
+	st = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
+	return st
+
+#open config file for connection details
+def getConnectString(fileName):
+	print 'reading config file...'
+	#logging.info('Starting method getConnectString')
+	cfgFile = open(fileName)
+	#logging.info('opening db config file')
+
+	cfgDict = {'db-name': 'default','db-schema':'default','db-password':'default'}
+
+	for line in cfgFile:
+	    if line.startswith('#'):
+	        print "commented line, skipping ahead..."
+	    elif line.startswith('db-name:'):
+	        temp = line.replace(' ','')
+	        marker = temp.find(':')
+	        temp = temp[marker+1:].rstrip()
+	        cfgDict['db-name'] = temp
+	    elif line.startswith('db-schema:'):
+	        temp = line.replace(' ','')
+	        marker = temp.find(':')
+	        temp = temp[marker+1:].rstrip()
+	        cfgDict['db-schema'] = temp
+	    elif line.startswith('db-password:'):
+	        temp = line.replace(' ','')
+	        marker = temp.find(':')
+	        temp = temp[marker+1:].rstrip()
+	        cfgDict['db-password'] = base64.b64decode(temp)
+	    else:
+	        print 'invalid configuration file...'
+
+	#close config file
+	cfgFile.close()
+	#logging.info('closed db config file')
+	
+	print getTime() + ': configuration loaded, launching app...'
+	
+	#build and return the database connection string in the appropriate format
+        #logging.info('returning cfgDict')
+	return cfgDict['db-schema']+'/'+cfgDict['db-password']+'@'+cfgDict['db-name']
+
+
+#open config file for connection details
+def getArsystemUser(fileName):
+	print 'reading config file...'
+	cfgFile = open(fileName)
+
+	cfgDict = {'arapi-url':'default','server-name':'default','user':'default','password':'default'}
+
+	for line in cfgFile:
+	    if line.startswith('#'):
+	        print "commented line, skipping ahead..."
+	    elif line.startswith('arapi-url:'):
+	        temp = line.replace(' ','')
+	        marker = temp.find(':')
+	        temp = temp[marker+1:].rstrip()
+	        cfgDict['arapi-url'] = temp
+	    elif line.startswith('server-name:'):
+	        temp = line.replace(' ','')
+	        marker = temp.find(':')
+	        temp = temp[marker+1:].rstrip()	        
+	        cfgDict['server-name'] = temp
+	    elif line.startswith('user:'):
+	        temp = line.replace(' ','')
+	        marker = temp.find(':')
+	        temp = temp[marker+1:].rstrip()
+	        cfgDict['user'] = temp
+	    elif line.startswith('password:'):
+	        temp = line.replace(' ','')
+	        marker = temp.find(':')
+	        temp = temp[marker+1:].rstrip()
+	        cfgDict['password'] = base64.b64decode(temp)
+	    else:
+	        print 'invalid configuration file...'
+
+	#close config file
+	cfgFile.close()
+	
+	print getTime() + ': configuration loaded, launching app...'
+	
+	#build and return the AR User object string in the appropriate format
+	return cfgDict
+
+
+
+def getWorkingDirectory():
+
+	#this function is used to find the exact machine directory the script is running in.  This is in case
+	#	someone moves the script to a new server or file location it will hopefully not break
+    return os.path.dirname(os.path.realpath(sys.argv[0]))
+
+
+def connectDatabase(configFile):
+	#leverage cx_Oracle library to make a connection to an oracle DB.  This requires the oracle client to be
+	#	installed on the machine
+	#logging.info('in method connectDatabase')
+	cxn = cx_Oracle.connect(getConnectString(configFile))
+	#logging.info('returning cxn')
+	return cxn
+
+
+def getData(data, cxn, wd, pw):
+
+	print getTime() + ': connection created successfully, getting data...'
+	#logging.info('starting getData method')
+	
+	#This loops through the dictionary defined at the top of the script as configData
+	for keys, values in data.iteritems():
+		sql = 'select * from ' + data[keys]["view"]+ ' '+ data[keys]["constraint"]
+		print 'executing '+ sql
+
+		ci_cur = cxn.cursor()
+		ci_cur.arraysize = 2000
+		ci_cur = ci_cur.execute(sql)
+
+	 	print getTime() + ': query executed successfully, exporting to csv...'
+		#logging.info('query has been executed')
+	 	#export to CSV
+		#logging.info('writing csv files')
+		with open(wd+'/data/'+keys+".csv","wb") as csv_file:
+			csv_writer = csv.writer(csv_file, quoting=csv.QUOTE_MINIMAL)
+			csv_writer.writerow([i[0] for i in ci_cur.description])
+			csv_writer.writerows(ci_cur)
+
+		print getTime() + ': csv export successful...'
+		#logging.info('write to csv is complete')
+
+		ci_cur.close()
+
+		print getTime() + ': cursor cleared, compressing file...'
+
+		command = '7za a '+wd+'/data/'+keys+'.zip '+wd+'/data/'+keys+'.csv -p'+pw
+
+		#subprocess module executes at command line.  we built the command above to use 7zip utility to archive
+		#	and password protect the CSV files
+		subprocess.call(command)
+
+		print getTime() + ': file compressed...'
+		#logging.info('file has been compressed')
+
+def runDatabaseProcedure(procName, cxn):
+	
+	print getTime() + ': Executing'+procName
+
+	ci_cur = cxn.cursor()
+
+	#executes a stored procedure in Oracle
+	ci_cur.callproc(procName)
+
+	print getTime() + ': Procedure completed.'
+
+	ci_cur.close()
+
+def callAtriumIntegrator(url, server, username, password):
+
+	#create the JSON to call an AI job, you can get these values from the AI Console in Remedy.
+	#PLEASE NOTE: An AI job must have at least one schedule to be callable from python.  The schedule
+	#	can even be a one time scheduled run in the past.
+	fieldValue = {'myUpdate' :{  8 : 'AI',
+	                501 : 'REMEDY_JOB_NAME',
+	                502 : r'/REMEDY_JOB_NAME',
+	                503 : '%AI_Job_Number_From_Remedy'
+	              }}
+
+	remote_url = url + server +'/'
+
+	#try:
+	    #We create an entry in the Application Pending form to remotely start the AI job.
+	r = requests.post(remote_url+'Application Pending', json.dumps(fieldValue), auth=(username,password))
+	print r.text                 
+	#except:
+	#    print 'Something went wrong trying to launch AI'
+
+#r = requests.post(remote_url+'Application Pending', json.dumps(fieldValue), auth=(username,password))
+#print (r.text )                              
+
+def main():
+	logging.info('starting main')
+	##### connect to the database using the config file
+	db_connection = connectDatabase('db.config')
+	logging.info('after db connection method')
+
+	##### get the directory of the server in which this script is running
+	logging.info('calling getWorkingDirectory')
+	path = getWorkingDirectory()
+	logging.info('after get working directory method')
+
+	##### set a password for your ZIP archives
+	zipPassword = '%BASE64_PASSWORD%'
+
+	##### use the data configured at the top of the script to export views from the database
+	logging.info('calling method getData')
+	getData(configData, db_connection, path, zipPassword)
+	logging.info('after method getData')
+
+	##### cleanup our database connection
+	logging.info('before db close method')
+	db_connection.close()
+	logging.info('after db close method')
+
+	##### XCOPY TO CORRECT DIRECTORIES FOR SFTP PREP
+	print getTime() +': Executing xcopy /Y '+path+'\data\*zip \\\\TARGET\\SERVER\\UNC\\PATH\\'
+
+	##### use subprocess module to execute command line, copy files over to our admin server for SFTP transfer
+	logging.info('start xcopy to %TARGET% server')
+	subprocess.call(r'xcopy /Y '+path+'\data\*zip \\\\TARGET\\SERVER\\UNC\\PATH\\')
+	logging.info('xcopy to %TARGET% server complete')
+
+	##### create a connection to ARSYSTEM (remedy)
+	logging.info('before AR system config read')
+	aruser = getArsystemUser('arsystem.config')
+	logging.info('after AR system config read')
+
+	##### remotely call an Atrium Integrator job
+	logging.info('Invoking AR procedure to sftp zip files')
+	callAtriumIntegrator(aruser['arapi-url'], aruser['server-name'], aruser['user'], aruser['password'])
+	logging.info('After completion of AR procedure to sftp zip files')
+
+	##### cleanup our ARSYSTEM (remedy) connection
+	##### ars.Logoff() - this is not defined, do not uncomment
+
+	print getTime() + ': Logged off of arsystem successfully.  Exiting...'
+	logging.info('Exiting main')
+
+if __name__ == "__main__":
+	main()
