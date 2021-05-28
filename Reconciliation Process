@@ -1,5 +1,6 @@
 ##First and foremost, 100% shout out to the Giesl** as author of this script - 
 #Used to query SQL tables via Oracle, call them into Remedy Atrium Integrator for reconciliation into a CMDB
+#run in Python2
 
 import cx_Oracle
 import csv
