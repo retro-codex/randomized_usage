@@ -1,0 +1,17 @@
+###Used to combine usernames and passwords to prep for coding. Output syntax is 'username:password'
+
+#open read files and target write file
+usernamefile = open("usernames.txt", "r")
+passwd = open("passwords.txt", "r")
+target = open("un_passwd_sandwich.txt", "w")
+#for loop nested for loop. 
+for i in usernamefile:
+    for p in passwd:
+        #write to target file usernamefile entry + special character + passwd file entry, and remove newline characters at end of each entry
+        target.write(i.replace("\n","")+":"+p.replace("\n",""))
+        #write to target, but now add a new line after each grouping
+        target.write("\n")
+    #tells the passwd file to start at position 0 (top of the file) [possibly for every entry in usernamefile]
+    passwd.seek(0)
+
+target.close()
