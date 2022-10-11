@@ -1,0 +1,10 @@
+#Base64 encoder
+import base64
+ensan = open("encoded_sandwich.txt", "w")
+with open("un_passwd_sandwich.txt") as sandwich:
+    for s in sandwich:
+        b = base64.b64encode(bytes(s, 'utf-8'))
+        s = b.decode('utf-8')
+        ensan.write(s)
+    sandwich.close()
+ensan.close()
