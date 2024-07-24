@@ -1,5 +1,5 @@
-#pull users who have changed their password since X date, or if the box is NOT checked to reset on netx login
-#variables to update are OU/DC/DC/Searchdate (Lines 5-6 only)
+#pull users who have changed their password since X date, or if the box is NOT checked to reset on next login
+#update variables OU/DC/DC/Searchdate (Lines 5-6 only)
 
 $verbosepreference = “continue” 
 $searchdate = “2019-05-01" #yyyy-MM-dd format 
